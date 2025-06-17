@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVR比較とカイ二乗検定アプリ</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+        }
+        h1 {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 0 0 24px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            text-align: left;
+            padding: 12px;
+            font-weight: normal;
+            color: #374151;
+        }
+        td {
+            padding: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .pattern-name {
+            font-weight: 600;
+            font-size: 18px;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .result-box {
+            padding: 8px 12px;
+            background-color: #f3f4f6;
+            border-radius: 6px;
+            text-align: center;
+            white-space: pre-line;
+        }
+        .add-button {
+            margin-top: 16px;
+            padding: 12px 24px;
+            background-color: #1f2937;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .add-button:hover {
+            background-color: #374151;
+        }
+        .remove-button {
+            background: none;
+            border: none;
+            color: #ef4444;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 18px;
+        }
+        .remove-button:hover {
+            color: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const CVRComparisonTool = () => {
+            const [patterns, setPatterns] = useState([
+                { id: 'A', name: 'A', impressions: '', cv: '', cvr: '', improveRate: '', pValue: '' },
+                { id: 'B', name: 'B', impressions: '', cv: '', cvr: '', improveRate: '', pValue: '' }
+            ]);
+
+            const addPattern = () => {
+                const newId = String.fromCharCode(65 + patterns.length);
+                setPatterns([...patterns, { 
+                    id: newId, 
+                    name: newId, 
+                    impressions: '', 
+                    cv: '', 
+                    cvr: '',
+                    improveRate: '',
+                    pValue: ''
+                }]);
+            };
+
+            const removePattern = (id) => {
+                if (patterns.length > 2) {
+                    setPatterns(patterns.filter(pattern => pattern.id !== id));
+                }
+            };
+
+            const updatePattern = (id, field, value) => {
+                const updatedPatterns = patterns.map(pattern => {
+                    if (pattern.id === id) {
+                        const updated = { ...pattern, [field]: value };
+                        
+                        if ((field === 'impressions' || field === 'cv') && updated.impressions && updated.cv) {
+                            const cvr = (parseFloat(updated.cv) / parseFloat(updated.impressions) * 100);
+                            updated.cvr = cvr.toFixed(2) + '%';
+                        }
+                        
+                        return updated;
+                    }
+                    return pattern;
+                });
+                
+                setPatterns(updatedPatterns);
+            };
+
+            const calculateChiSquare = (impressions1, cv1, impressions2, cv2) => {
+                const nonCv1 = impressions1 - cv1;
+                const nonCv2 = impressions2 - cv2;
+                const totalImpressions = impressions1 + impressions2;
+                const totalCv = cv1 + cv2;
+                const totalNonCv = nonCv1 + nonCv2;
+                
+                const expected11 = (totalCv * impressions1) / totalImpressions;
+                const expected12 = (totalNonCv * impressions1) / totalImpressions;
+                const expected21 = (totalCv * impressions2) / totalImpressions;
+                const expected22 = (totalNonCv * impressions2) / totalImpressions;
+                
+                const chi2 = 
+                    Math.pow(cv1 - expected11, 2) / expected11 +
+                    Math.pow(nonCv1 - expected12, 2) / expected12 +
+                    Math.pow(cv2 - expected21, 2) / expected21 +
+                    Math.pow(nonCv2 - expected22, 2) / expected22;
+                
+                let pValue;
+                if (chi2 >= 10.83) pValue = 0.001;
+                else if (chi2 >= 6.64) pValue = 0.01;
+                else if (chi2 >= 3.84) pValue = 0.05;
+                else if (chi2 >= 2.71) pValue = 0.10;
+                else pValue = Math.max(0.1, Math.exp(-chi2/2));
+                
+                return pValue;
+            };
+
+            const calculate = () => {
+                const validPatterns = patterns.filter(p => p.impressions && p.cv);
+                
+                if (validPatterns.length < 2) return;
+                
+                const basePattern = validPatterns[0];
+                const baseImpressions = parseInt(basePattern.impressions);
+                const baseCv = parseInt(basePattern.cv);
+                const baseCvr = baseCv / baseImpressions;
+                
+                const updatedPatterns = patterns.map((pattern, index) => {
+                    if (index === 0 || !pattern.impressions || !pattern.cv) {
+                        return { ...pattern, improveRate: '', pValue: '' };
+                    }
+                    
+                    const impressions = parseInt(pattern.impressions);
+                    const cv = parseInt(pattern.cv);
+                    const cvr = cv / impressions;
+                    
+                    const improveRate = ((cvr - baseCvr) / baseCvr * 100);
+                    const pValue = calculateChiSquare(baseImpressions, baseCv, impressions, cv);
+                    
+                    return {
+                        ...pattern,
+                        improveRate: improveRate.toFixed(2) + '%',
+                        pValue: (pValue * 100).toFixed(2) + '%' + (pValue < 0.05 ? '\n(低)' : '')
+                    };
+                });
+                
+                setPatterns(updatedPatterns);
+            };
+
+            return (
+                <div className="container">
+                    <div className="card">
+                        <h1>CVR比較とカイ二乗検定アプリ</h1>
+                        
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>パターン</th>
+                                    <th>インプレッション数</th>
+                                    <th>CV数</th>
+                                    <th>CVR</th>
+                                    <th>改善率</th>
+                                    <th>P値</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {patterns.map((pattern, index) => (
+                                    <tr key={pattern.id}>
+                                        <td className="pattern-name">{pattern.name}</td>
+                                        <td>
+                                            <input
+                                                type="number"
+                                                value={pattern.impressions}
+                                                onChange={(e) => updatePattern(pattern.id, 'impressions', e.target.value)}
+                                                onBlur={calculate}
+                                                placeholder="24805"
+                                            />
+                                        </td>
+                                        <td>
+                                            <input
+                                                type="number"
+                                                value={pattern.cv}
+                                                onChange={(e) => updatePattern(pattern.id, 'cv', e.target.value)}
+                                                onBlur={calculate}
+                                                placeholder="832"
+                                            />
+                                        </td>
+                                        <td>
+                                            <div className="result-box">
+                                                {pattern.cvr || '-'}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div className="result-box">
+                                                {pattern.improveRate || (index === 0 ? '基準' : '-')}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div className="result-box">
+                                                {pattern.pValue || '-'}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {patterns.length > 2 && (
+                                                <button
+                                                    onClick={() => removePattern(pattern.id)}
+                                                    className="remove-button"
+                                                >
+                                                    ×
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        
+                        <button onClick={addPattern} className="add-button">
+                            + パターン追加
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<CVRComparisonTool />, document.getElementById('root'));
+    </script>
+</body>
+</html>
