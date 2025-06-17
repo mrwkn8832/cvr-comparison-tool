@@ -190,12 +190,12 @@
                     
                     const improveRate = (cvr / baseCvr * 100);
                     const pValue = calculateChiSquare(baseImpressions, baseCv, impressions, cv);
-                    const pValuePercent = pValue * 100;
+                    const confidence = (1 - pValue) * 100;  // 信頼度に変換
                     
                     let significance = '';
-                    if (pValuePercent < 50) {
+                    if (confidence >= 95) {
                         significance = '(高)';
-                    } else if (pValuePercent < 80) {
+                    } else if (confidence >= 90) {
                         significance = '(中)';
                     } else {
                         significance = '(低)';
@@ -204,7 +204,7 @@
                     return {
                         ...pattern,
                         improveRate: improveRate.toFixed(1) + '%',
-                        pValue: pValuePercent.toFixed(2) + '%\n' + significance
+                        pValue: confidence.toFixed(2) + '%\n' + significance
                     };
                 });
                 
@@ -238,7 +238,7 @@
                                                 value={pattern.impressions}
                                                 onChange={(e) => updatePattern(pattern.id, 'impressions', e.target.value)}
                                                 onBlur={calculate}
-                                                placeholder="10000"
+                                                placeholder="24805"
                                             />
                                         </td>
                                         <td>
